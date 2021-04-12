@@ -22,7 +22,7 @@ type FrameClient struct {
 func HandleRoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w,
-		`<!DOCTYPE html>
+	`<!DOCTYPE html>
 	<html>
 	<head>
 		<h1>Welcome to cam server %s!</h1>

@@ -11,6 +11,11 @@ import (
 	"github.com/blackjack/webcam"
 )
 
+/*
+	This file defines a worker to stream and process frames from the camera.
+	Note: code is heavily borrowed from https://github.com/blackjack/webcam/blob/master/examples/http_mjpeg_streamer/webcam.go
+*/
+
 var (
 	V4L2_PIX_FMT_PJPG  webcam.PixelFormat
 	V4L2_PIX_FMT_MJPEG webcam.PixelFormat
@@ -87,8 +92,8 @@ func StreamWorker(ctx context.Context, errCh chan error, wg *sync.WaitGroup, li 
 
 	// Channels to handle messaging with the image encoder goroutine
 	var (
-		fi   chan []byte        = make(chan []byte)
-		back chan struct{}      = make(chan struct{})
+		fi   chan []byte   = make(chan []byte)
+		back chan struct{} = make(chan struct{})
 	)
 
 	go encodeToImage(cam, back, fi, li, 1920, 1080, errCh)
@@ -125,6 +130,11 @@ func StreamWorker(ctx context.Context, errCh chan error, wg *sync.WaitGroup, li 
 	log.Println("Stopped camera streamer")
 }
 
+/*
+	This function is supposed to take the raw bytes output by the camera streamer on the fi channel and convert them to jpeg,
+	and then forward the jpeg bytes onto the li channel. It turns out the bytes we are getting are already jpeg so most of
+	this should can probably be removed (TODO: verify this). When a new frame is pushed to fi, the
+*/
 func encodeToImage(wc *webcam.Webcam, back chan struct{}, fi chan []byte, li chan *bytes.Buffer, w, h uint32, errCh chan error) {
 
 	var (
@@ -137,6 +147,7 @@ func encodeToImage(wc *webcam.Webcam, back chan struct{}, fi chan []byte, li cha
 			frame = make([]byte, len(bframe))
 		}
 		copy(frame, bframe)
+		// Signal to the streamer worker that it should grab the next frame. Meanwhile we will be broadcasting this frame
 		back <- struct{}{}
 
 		img, _, err := image.Decode(bytes.NewReader(frame))
@@ -156,12 +167,27 @@ func encodeToImage(wc *webcam.Webcam, back chan struct{}, fi chan []byte, li cha
 		nn := 0
 	FOR:
 		for ; nn < N; nn++ {
+			/*
+				This select statement will check if anyone is waiting on data to come in through `li`, and if so, it will
+				send the data to that client. If no one is currently waiting, then the default case runs, and the for loop
+				breaks. The purpose of this is so that we can have N goroutine clients concurrently receive the same frame
+				allowing for concurrent access to the stream. (Otherwise, each client goroutine would receive unique
+				frames, which could quickly slow down their streams)
+			*/
 			select {
 			case li <- buf:
 			default:
 				break FOR
 			}
 		}
+
+		/*
+			If the number of clients we successfully broadcast the frame to was zero, this means no goroutine is currently
+			waiting on a frame. Instead of grabbing more frames to process that no one wants, we will wait here for the
+			next goroutine to request a frame. NOTE: this implementation has the side effect that the next frame will be
+			stale if significant time passes before a goroutine requests a frame. Therefore, it is advised to perform a
+			`<-li` in the client goroutine before requesting another frame to clear the stale one.
+		*/
 		if nn == 0 {
 			li <- buf
 		}
