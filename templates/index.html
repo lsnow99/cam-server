@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <h1>Welcome to cam server {{.Version}}!</h1>
+</head>
+
+<body>
+    <p>Check out the following links!</p>
+    <ol>
+        {{range .Routes}}
+        <li><a href="{{.Path}}">{{.Path}}</a> - {{.Description}}</li>
+        {{end}}
+    </ol>
+</body>
+
+</html>

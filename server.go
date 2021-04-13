@@ -3,15 +3,16 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
 	"os/exec"
+	"path"
 	"strconv"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -19,25 +20,38 @@ type FrameClient struct {
 	li chan *bytes.Buffer
 }
 
-// HandleRoot simple http handler to serve a welcome message
-func HandleRoot(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w,
-		`<!DOCTYPE html>
-	<html>
-	<head>
-		<h1>Welcome to cam server %s!</h1>
-	</head>
-	<body>
-		<p>Check out the following links!</p>
-		<ol>
-			<li><a href="/snap">/snap</a> - view a still image of the camera</li>
-			<li><a href="/stream">/stream</a> - view a livestream of the camera</li>
-			<li><a href="/timelapse">/timelapse</a> - download a timelapse video <b style="color:red">NOT AVAILABLE</b></li>
-		</ol>
-	</body>
-	</html>
-	`, Version)
+type route struct {
+	Path        string
+	Description string
+	handler     http.HandlerFunc
+}
+
+type RouteTable struct {
+	Routes []route
+}
+
+type IndexInfo struct {
+	RouteTable
+	Version string
+}
+
+// HandleRoot simple http handler to render our index.html sitemap
+func (rt *RouteTable) HandleRoot(w http.ResponseWriter, r *http.Request) {
+
+	ii := IndexInfo{}
+	ii.Routes = rt.Routes
+	ii.Version = Version
+
+	t, err := template.ParseFiles("./templates/index.html")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+
+	if err := t.Execute(w, ii); err != nil {
+		log.Println(err)
+	}
 }
 
 // HandleStream returns a stream of jpeg frames
@@ -123,6 +137,33 @@ func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port s
 	}
 
 	/*
+		Register some routes with our global routes table. This is just a neat way to
+		update our index.html without modifying the template, so it generates the
+		sitemap at runtime.
+	*/
+	rt := RouteTable{
+		Routes: []route{
+			{
+				Path:        "/snap",
+				Description: "view a livestream of the camera",
+				handler:     fc.HandleSnapshot,
+			},
+			{
+				Path:        "/stream",
+				Description: "view a still image of the camera",
+				handler:     fc.HandleStream,
+			},
+			{
+				Path:        "/timelapse",
+				Description: "view a timelapse video",
+				handler: func(w http.ResponseWriter, r *http.Request) {
+					http.ServeFile(w, r, path.Join(TimelapseOutputDir, "timelapse.mp4"))
+				},
+			},
+		},
+	}
+
+	/*
 		Here we create a new http mux. You can alternatively just use `http.HandleFunc`
 		instead of `mux.HandleFunc` but then all http servers started by this program
 		will use that handling rule. Instead of using the global http mux, I like to
@@ -130,10 +171,11 @@ func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port s
 		matter when there is only one http server, as in this case.
 	*/
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", HandleRoot)
-	mux.HandleFunc("/stream", fc.HandleStream)
-	mux.HandleFunc("/snap", fc.HandleSnapshot)
-	// mux.HandleFunc("/timelapse", HandleTimelapse)
+	mux.HandleFunc("/", rt.HandleRoot)
+	for _, route := range rt.Routes {
+		mux.HandleFunc(route.Path, route.handler)
+	}
+
 	server := &http.Server{
 		Addr:        ":" + port,
 		Handler:     mux,
