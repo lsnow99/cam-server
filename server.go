@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -22,7 +23,7 @@ type FrameClient struct {
 func HandleRoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w,
-	`<!DOCTYPE html>
+		`<!DOCTYPE html>
 	<html>
 	<head>
 		<h1>Welcome to cam server %s!</h1>
@@ -32,7 +33,7 @@ func HandleRoot(w http.ResponseWriter, r *http.Request) {
 		<ol>
 			<li><a href="/snap">/snap</a> - view a still image of the camera</li>
 			<li><a href="/stream">/stream</a> - view a livestream of the camera</li>
-			<li><a href="/timelapse">/timelapse</a> - download a timelapse video</li>
+			<li><a href="/timelapse">/timelapse</a> - download a timelapse video <b style="color:red">NOT AVAILABLE</b></li>
 		</ol>
 	</body>
 	</html>
@@ -90,7 +91,7 @@ func HandleTimelapse(w http.ResponseWriter, r *http.Request) {
 	} else if tod[len(tod)-1] == '/' {
 		tod = tod[:len(tod)-1]
 	}
-	filename := strconv.FormatInt(time.Now().Unix(), 10) + ".mkv"
+	filename := strconv.FormatInt(time.Now().Unix(), 10) + ".mp4"
 	cmd := exec.Command("sh", "-c", `ffmpeg -framerate 30 -pattern_type glob -i "`+tod+`/*.jpg" -codec copy `+tod+"/"+filename)
 
 	_, err := cmd.CombinedOutput()
@@ -99,7 +100,16 @@ func HandleTimelapse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.ServeFile(w, r, tod+"/"+filename)
+	data, err := ioutil.ReadFile(string(tod + "/" + filename))
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Add("Content-Type", "video/mp4")
+	w.Header().Add("Content-Length", strconv.Itoa(len(data)))
+	w.Write(data)
 }
 
 func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port string, li chan *bytes.Buffer) {
@@ -123,7 +133,7 @@ func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port s
 	mux.HandleFunc("/", HandleRoot)
 	mux.HandleFunc("/stream", fc.HandleStream)
 	mux.HandleFunc("/snap", fc.HandleSnapshot)
-	mux.HandleFunc("/timelapse", HandleTimelapse)
+	// mux.HandleFunc("/timelapse", HandleTimelapse)
 	server := &http.Server{
 		Addr:        ":" + port,
 		Handler:     mux,
