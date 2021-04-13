@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+// TimelapseWorker loop to take timelapse snapshots and stitch together the timelapse video
 func TimelapseWorker(ctx context.Context, errCh chan error, wg *sync.WaitGroup, li chan *bytes.Buffer) {
 	// This is guaranteed to run as the last thing before this function returns
 	defer wg.Done()

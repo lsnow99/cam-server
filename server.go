@@ -97,35 +97,7 @@ func (fc *FrameClient) HandleSnapshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func HandleTimelapse(w http.ResponseWriter, r *http.Request) {
-	tod := TimelapseOutputDir
-	if len(tod) < 0 {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	} else if tod[len(tod)-1] == '/' {
-		tod = tod[:len(tod)-1]
-	}
-	filename := strconv.FormatInt(time.Now().Unix(), 10) + ".mp4"
-	cmd := exec.Command("sh", "-c", `ffmpeg -framerate 30 -pattern_type glob -i "`+tod+`/*.jpg" -codec copy `+tod+"/"+filename)
-
-	_, err := cmd.CombinedOutput()
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	data, err := ioutil.ReadFile(string(tod + "/" + filename))
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Add("Content-Type", "video/mp4")
-	w.Header().Add("Content-Length", strconv.Itoa(len(data)))
-	w.Write(data)
-}
-
+// ServeHttp start the http server
 func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port string, li chan *bytes.Buffer) {
 	// This is guaranteed to run as the last thing before this function returns
 	defer wg.Done()
@@ -139,7 +111,9 @@ func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port s
 	/*
 		Register some routes with our global routes table. This is just a neat way to
 		update our index.html without modifying the template, so it generates the
-		sitemap at runtime.
+		sitemap at runtime. I added this because I wanted a way for index.html to
+		automatically add new routes to the sitemap without me having to edit anything.
+		Structure is subject to change.
 	*/
 	rt := RouteTable{
 		Routes: []route{

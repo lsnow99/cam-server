@@ -21,7 +21,7 @@ var (
 	V4L2_PIX_FMT_MJPEG webcam.PixelFormat
 )
 
-func FourCCToU32(b []byte) uint32 {
+func fourCCToU32(b []byte) uint32 {
 	return uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
 }
 
@@ -51,16 +51,17 @@ func initFormatCodes() {
 		2: 'P',
 		3: 'G',
 	}
-	V4L2_PIX_FMT_PJPG = webcam.PixelFormat(FourCCToU32(pjpg))
+	V4L2_PIX_FMT_PJPG = webcam.PixelFormat(fourCCToU32(pjpg))
 	mjpeg := []byte{
 		0: 'M',
 		1: 'J',
 		2: 'P',
 		3: 'G',
 	}
-	V4L2_PIX_FMT_MJPEG = webcam.PixelFormat(FourCCToU32(mjpeg))
+	V4L2_PIX_FMT_MJPEG = webcam.PixelFormat(fourCCToU32(mjpeg))
 }
 
+// StreamWorker main loop to grab raw frame data from the camera
 func StreamWorker(ctx context.Context, errCh chan error, wg *sync.WaitGroup, li chan *bytes.Buffer) {
 	// This is guaranteed to run as the last thing before this function returns
 	defer wg.Done()
@@ -131,9 +132,13 @@ func StreamWorker(ctx context.Context, errCh chan error, wg *sync.WaitGroup, li 
 }
 
 /*
-	This function is supposed to take the raw bytes output by the camera streamer on the fi channel and convert them to jpeg,
-	and then forward the jpeg bytes onto the li channel. It turns out the bytes we are getting are already jpeg so most of
-	this should can probably be removed (TODO: verify this). When a new frame is pushed to fi, the
+	encodeToImage This function is supposed to take the raw bytes output by the camera streamer on the fi channel and convert 
+	them to jpeg, and then forward the jpeg bytes onto the li channel. It turns out the bytes we are getting are already jpeg 
+	so most of this should can probably be removed (TODO: verify this). When a new frame is pushed to fi, it is picked up by
+	this function and processed. The processed jpeg is pushed onto li, and up to N client goroutines can grab the frame from
+	li before a new frame is grabbed from fi. At least one client goroutine must draw a frame from li before the loop
+	continues and a fresh frame is grabbed. Consequently, it is advised to pop a frame off of li before grabbing a fresh one
+	in a client goroutine if it does not know how recently the last frame was requested.
 */
 func encodeToImage(wc *webcam.Webcam, back chan struct{}, fi chan []byte, li chan *bytes.Buffer, w, h uint32, errCh chan error) {
 
