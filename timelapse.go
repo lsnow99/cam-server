@@ -71,7 +71,7 @@ FOR:
 			log.Printf("Recorded timelapse snapshot @ %v", now)
 
 			encodeStarted := time.Now()
-			vidFilename := path.Join(TimelapseOutputDir, "timelapse_" + strconv.FormatInt(encodeStarted.Unix(), 10) + ".mp4")
+			vidFilename := path.Join(TimelapseOutputDir, "timelapse_"+strconv.FormatInt(encodeStarted.Unix(), 10)+".mp4")
 			jpgGlob := path.Join(TimelapseOutputDir, "*.jpg")
 			cmd := exec.Command("sh", "-c", `ffmpeg -framerate 30 -pattern_type glob -i "`+jpgGlob+`" -y `+vidFilename)
 			_, err = cmd.CombinedOutput()
@@ -81,7 +81,7 @@ FOR:
 			}
 			encodeDur := time.Since(encodeStarted)
 			minStr := strconv.FormatFloat(math.Floor(encodeDur.Minutes()), 'f', 0, 64)
-			secStr := strconv.FormatInt(int64(encodeDur.Seconds()) % 60, 10)
+			secStr := strconv.FormatInt(int64(encodeDur.Seconds())%60, 10)
 			if encodeDur >= time.Duration(TimelapseIntervalMins)*time.Minute {
 				log.Printf("ERROR: timelapse encoding took %sm%ss, greater than the timelapse capture interval of %dm", minStr, secStr, TimelapseIntervalMins)
 			} else if encodeDur >= (time.Duration(TimelapseIntervalMins)*time.Minute)/2 {
