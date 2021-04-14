@@ -3,12 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"os/exec"
 	"path"
 	"strconv"
 	"sync"
