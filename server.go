@@ -117,12 +117,12 @@ func ServeHttp(ctx context.Context, errCh chan error, wg *sync.WaitGroup, port s
 		Routes: []route{
 			{
 				Path:        "/snap",
-				Description: "view a livestream of the camera",
+				Description: "view a still image of the camera",
 				handler:     fc.HandleSnapshot,
 			},
 			{
 				Path:        "/stream",
-				Description: "view a still image of the camera",
+				Description: "view a livestream of the camera",
 				handler:     fc.HandleStream,
 			},
 			{
